@@ -2,9 +2,6 @@
  * @file Authentication middleware tests
  * @purpose Verify that authentication middleware correctly rejects
  *          unauthenticated requests and allows public auth routes through.
- *          Note: Full JWT verification requires Supabase, so these tests
- *          focus on the middleware's structural behaviour (missing tokens,
- *          malformed headers, public path bypass).
  * @spec N/A (bootstrap security verification)
  */
 
@@ -16,20 +13,16 @@ import type { AuthEnv, AuthVariables } from '../../src/middleware/auth.js';
 function createTestApp() {
   const app = new Hono<{ Bindings: AuthEnv; Variables: AuthVariables }>();
 
-  // Apply auth middleware to /api/* routes
   app.use('/api/*', authMiddleware);
 
-  // Protected route
   app.get('/api/protected', (c) => {
     return c.json({ userId: c.get('userId') });
   });
 
-  // Public auth route (should bypass auth)
   app.get('/api/auth/login', (c) => {
     return c.json({ status: 'login page' });
   });
 
-  // Non-API route (no auth middleware applied)
   app.get('/health', (c) => c.json({ status: 'ok' }));
 
   return app;
@@ -45,7 +38,7 @@ describe('Authentication Middleware', () => {
       } as unknown as AuthEnv);
 
       expect(res.status).toBe(401);
-      const body = await res.json();
+      const body = (await res.json()) as { error: string };
       expect(body.error).toBe('Authentication required');
     });
 
@@ -78,8 +71,6 @@ describe('Authentication Middleware', () => {
         } as unknown as AuthEnv,
       );
 
-      // Will fail at Supabase verification since empty token
-      // But should not crash - should return 401
       expect(res.status).toBe(401);
     });
   });
@@ -90,7 +81,7 @@ describe('Authentication Middleware', () => {
       const res = await app.request('/api/auth/login');
 
       expect(res.status).toBe(200);
-      const body = await res.json();
+      const body = (await res.json()) as { status: string };
       expect(body.status).toBe('login page');
     });
   });
