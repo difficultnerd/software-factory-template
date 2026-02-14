@@ -1,0 +1,216 @@
+name: Implementer Agent
+
+on:
+  # Trigger when a tests PR is merged
+  pull_request:
+    types: [closed]
+    paths:
+      - 'tests/contract/**'
+      - 'src/schemas/**'
+
+jobs:
+  implement:
+    name: Generate Implementation
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.merged == true
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Find spec from merged tests
+        id: find
+        run: |
+          # Look for spec files to determine which spec these tests belong to
+          # Convention: tests PR title contains the spec ID
+          # Fallback: find the most recent spec
+          SPEC_FILES=$(ls factory/specs/SPEC-*.md 2>/dev/null || true)
+
+          if [ -z "$SPEC_FILES" ]; then
+            echo "No spec files found"
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Use the most recently modified spec
+          SPEC_FILE=$(ls -t factory/specs/SPEC-*.md | head -1)
+          SPEC_ID=$(basename "$SPEC_FILE" .md)
+
+          PLAN_FILE="factory/plans/PLAN-${SPEC_ID}.md"
+
+          echo "spec_file=$SPEC_FILE" >> "$GITHUB_OUTPUT"
+          echo "spec_id=$SPEC_ID" >> "$GITHUB_OUTPUT"
+          echo "plan_file=$PLAN_FILE" >> "$GITHUB_OUTPUT"
+          echo "found=true" >> "$GITHUB_OUTPUT"
+
+          echo "Spec: $SPEC_FILE"
+          echo "Plan: $PLAN_FILE"
+          echo "Spec ID: $SPEC_ID"
+
+      - name: Implement via Claude API
+        if: steps.find.outputs.found == 'true'
+        id: implement
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SPEC_FILE: ${{ steps.find.outputs.spec_file }}
+          PLAN_FILE: ${{ steps.find.outputs.plan_file }}
+          SPEC_ID: ${{ steps.find.outputs.spec_id }}
+        run: node .github/scripts/implementer-agent.mjs
+
+      - name: Run tests
+        if: steps.find.outputs.found == 'true'
+        id: test_run
+        run: |
+          echo "Running tests against implementation..."
+          npx vitest run 2>&1 | tee test-output.txt || true
+
+          # Check if tests passed
+          if grep -q "Tests.*failed" test-output.txt; then
+            echo "tests_passed=false" >> "$GITHUB_OUTPUT"
+            echo "Some tests failed. Will note in PR."
+          else
+            echo "tests_passed=true" >> "$GITHUB_OUTPUT"
+            echo "All tests passed!"
+          fi
+
+      - name: Run type check
+        if: steps.find.outputs.found == 'true'
+        id: typecheck
+        run: |
+          npx tsc --noEmit 2>&1 | tee typecheck-output.txt || true
+          if [ ${PIPESTATUS[0]} -eq 0 ]; then
+            echo "types_pass=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "types_pass=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run lint
+        if: steps.find.outputs.found == 'true'
+        id: lint
+        run: |
+          npx eslint src/ 2>&1 | tee lint-output.txt || true
+          if [ ${PIPESTATUS[0]} -eq 0 ]; then
+            echo "lint_pass=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "lint_pass=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Format code
+        if: steps.find.outputs.found == 'true'
+        run: npx prettier --write 'src/**/*.ts' || true
+
+      - name: Create PR with implementation
+        if: steps.find.outputs.found == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SPEC_ID: ${{ steps.find.outputs.spec_id }}
+          FILES_WRITTEN: ${{ steps.implement.outputs.files_written }}
+          TESTS_PASSED: ${{ steps.test_run.outputs.tests_passed }}
+          TYPES_PASS: ${{ steps.typecheck.outputs.types_pass }}
+          LINT_PASS: ${{ steps.lint.outputs.lint_pass }}
+        run: |
+          BRANCH="impl/${SPEC_ID}"
+
+          git config user.name "implementer-agent[bot]"
+          git config user.email "implementer-agent[bot]@users.noreply.github.com"
+
+          git checkout -b "$BRANCH"
+          git add src/ supabase/ || true
+          git add -u src/ || true
+
+          # Check if there are changes to commit
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 1
+          fi
+
+          git commit -m "impl: implement ${SPEC_ID}
+
+          Spec: ${SPEC_ID}
+          Agent: implementer-agent (claude-sonnet-4-20250514)
+          Files written: ${FILES_WRITTEN}
+          Tests passing: ${TESTS_PASSED}
+          Types clean: ${TYPES_PASS}
+          Lint clean: ${LINT_PASS}"
+
+          git push -u origin "$BRANCH"
+
+          # Build status summary
+          STATUS=""
+          if [ "$TESTS_PASSED" = "true" ]; then
+            STATUS="${STATUS}\n- ✅ Tests passing"
+          else
+            STATUS="${STATUS}\n- ❌ Some tests failing (may need review or iteration)"
+          fi
+          if [ "$TYPES_PASS" = "true" ]; then
+            STATUS="${STATUS}\n- ✅ TypeScript clean"
+          else
+            STATUS="${STATUS}\n- ⚠️ Type errors present"
+          fi
+          if [ "$LINT_PASS" = "true" ]; then
+            STATUS="${STATUS}\n- ✅ Lint clean"
+          else
+            STATUS="${STATUS}\n- ⚠️ Lint warnings present"
+          fi
+
+          PR_URL=$(gh pr create \
+            --title "Implementation: ${SPEC_ID}" \
+            --body "## Implementation for ${SPEC_ID}
+
+          Generated by the **Implementer Agent** from the approved spec and tests.
+
+          ### Status
+          $(echo -e "$STATUS")
+
+          ### Review Checklist
+          - [ ] All contract tests pass
+          - [ ] All security tests pass
+          - [ ] No middleware modifications
+          - [ ] Supabase migrations include RLS policies
+          - [ ] No service_role key in client code
+          - [ ] All external input validated via Zod
+          - [ ] Structured logging used (no console.log)
+          - [ ] Header comments present on all files
+          - [ ] Files under 300 lines
+
+          ### Pending Reviews
+          This PR needs review from:
+          1. **Security Reviewer** - ASVS compliance, RLS policies, auth enforcement
+          2. **Code Reviewer** - conventions, architecture, maintainability
+
+          ### Database Migrations
+          Check \`supabase/migrations/\` for any SQL that needs to be applied.
+
+          ---
+          *Generated by implementer-agent. Awaiting security and code review.*" \
+            --base main \
+            --head "$BRANCH")
+
+          echo "Implementation PR created: $PR_URL"
+
+      - name: Handle errors
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SPEC_ID: ${{ steps.find.outputs.spec_id }}
+        run: |
+          gh issue create \
+            --title "Implementer Agent failed for ${SPEC_ID}" \
+            --body "The Implementer Agent encountered an error for ${SPEC_ID}.
+
+          Check the [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details.
+
+          This requires manual investigation." \
+            --label "escalation" || true
