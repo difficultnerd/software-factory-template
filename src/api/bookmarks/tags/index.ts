@@ -28,7 +28,7 @@ app.get('/', async (c) => {
     const tags = await service.getUserTags();
 
     return c.json({ data: tags });
-  } catch (error) {
+  } catch (_error) {
     return c.json({ error: 'Failed to fetch tags' }, 500);
   }
 });
