@@ -1,0 +1,52 @@
+# Decision Tiering Configuration
+# This file controls agent decision authority.
+# Only the human modifies this file.
+# If a decision category is not listed here, default to Tier 3.
+
+tiers:
+  # Tier 1: Guess and continue. Log decision in factory/decisions.md.
+  tier_1_guess_and_log:
+    - naming_conventions
+    - internal_code_organisation
+    - error_message_wording
+    - log_level_selection
+    - comment_content
+    - import_ordering
+    - variable_naming_within_functions
+
+  # Tier 2: Guess conservatively, flag prominently, continue with caution.
+  # Tag dependent tests as 'assumption-dependent'.
+  tier_2_guess_conservative_and_flag:
+    - optional_vs_required_fields
+    - pagination_defaults
+    - cache_durations
+    - retry_strategies
+    - default_sort_ordering
+    - rate_limit_thresholds
+    - new_dependency_addition
+
+  # Tier 3: Stop and escalate. No guessing.
+  # Create GitHub Issue assigned to human. Block this task, continue others.
+  tier_3_stop_and_escalate:
+    - authentication_decisions
+    - authorisation_scope
+    - data_model_changes
+    - api_contract_changes
+    - infrastructure_changes
+    - encryption_choices
+    - external_service_integration
+    - middleware_modification
+    - rls_policy_changes
+    - secret_management
+    - new_dependency_with_native_code
+    - privacy_and_pii_decisions
+    - cross_origin_configuration
+    - service_role_key_usage
+
+# Items that must NEVER leave Tier 3, regardless of trust level:
+permanent_tier_3:
+  - infrastructure_changes
+  - middleware_modification
+  - rls_policy_changes
+  - secret_management
+  - service_role_key_usage
