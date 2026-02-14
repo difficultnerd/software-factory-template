@@ -1,2 +1,2 @@
 # software-factory-template
-Claude Software Factory Template
+Claude Software Factory Template - v0.1
