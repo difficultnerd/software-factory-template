@@ -23,6 +23,19 @@ const TestQuerySchema = z.object({
   limit: z.string().regex(/^\d+$/).optional(),
 });
 
+interface TestBodyResponse {
+  received: { name: string; email?: string; age?: number; malicious?: string };
+}
+
+interface TestQueryResponse {
+  query: { page?: string; limit?: string };
+}
+
+interface ErrorResponse {
+  error: string;
+  details?: Record<string, string[]>;
+}
+
 function createTestApp() {
   const app = new Hono<{ Variables: ValidationVariables }>();
 
@@ -50,7 +63,7 @@ describe('Validation Middleware', () => {
       });
 
       expect(res.status).toBe(200);
-      const body = await res.json();
+      const body = (await res.json()) as TestBodyResponse;
       expect(body.received.name).toBe('Test Thing');
     });
 
@@ -63,7 +76,7 @@ describe('Validation Middleware', () => {
       });
 
       expect(res.status).toBe(400);
-      const body = await res.json();
+      const body = (await res.json()) as ErrorResponse;
       expect(body.error).toBe('Validation failed');
       expect(body.details).toBeTruthy();
     });
@@ -110,7 +123,7 @@ describe('Validation Middleware', () => {
       });
 
       expect(res.status).toBe(400);
-      const body = await res.json();
+      const body = (await res.json()) as ErrorResponse;
       expect(body.error).toBe('Invalid JSON in request body');
     });
 
@@ -123,7 +136,7 @@ describe('Validation Middleware', () => {
       });
 
       expect(res.status).toBe(200);
-      const body = await res.json();
+      const body = (await res.json()) as TestBodyResponse;
       expect(body.received.malicious).toBeUndefined();
     });
 
@@ -145,7 +158,7 @@ describe('Validation Middleware', () => {
       const res = await app.request('/api/search?page=1&limit=10');
 
       expect(res.status).toBe(200);
-      const body = await res.json();
+      const body = (await res.json()) as TestQueryResponse;
       expect(body.query.page).toBe('1');
     });
 
