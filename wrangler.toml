@@ -2,7 +2,8 @@ name = "software-factory-api"
 main = "src/index.ts"
 compatibility_date = "2024-01-01"
 
-[vars]
-# Non-secret environment variables go here
-# Secrets are set via: wrangler secret put SECRET_NAME
-
+# Secrets are set via GitHub Actions using wrangler secret put
+# Never commit secret values to this file.
+# Required secrets:
+#   SUPABASE_URL
+#   SUPABASE_ANON_KEY

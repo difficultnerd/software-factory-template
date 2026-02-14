@@ -5,15 +5,13 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_call:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  # ──────────────────────────────────────────────
-  # Type checking and linting
-  # ──────────────────────────────────────────────
   typecheck-and-lint:
     name: Type Check & Lint
     runs-on: ubuntu-latest
@@ -36,9 +34,6 @@ jobs:
       - name: Format check
         run: npx prettier --check 'src/**/*.ts' 'tests/**/*.ts'
 
-  # ──────────────────────────────────────────────
-  # Tests
-  # ──────────────────────────────────────────────
   test:
     name: Tests
     runs-on: ubuntu-latest
@@ -63,9 +58,6 @@ jobs:
           path: coverage/
           retention-days: 7
 
-  # ──────────────────────────────────────────────
-  # Security: SAST (Semgrep)
-  # ──────────────────────────────────────────────
   sast:
     name: SAST (Semgrep)
     runs-on: ubuntu-latest
@@ -86,9 +78,6 @@ jobs:
           path: semgrep-results.json
           retention-days: 30
 
-  # ──────────────────────────────────────────────
-  # Security: Secret scanning
-  # ──────────────────────────────────────────────
   secret-scan:
     name: Secret Scanning
     runs-on: ubuntu-latest
@@ -106,9 +95,6 @@ jobs:
       - name: Run gitleaks
         run: gitleaks detect --source . --verbose --redact
 
-  # ──────────────────────────────────────────────
-  # Security: Dependency audit
-  # ──────────────────────────────────────────────
   dependency-audit:
     name: Dependency Audit
     runs-on: ubuntu-latest
@@ -141,9 +127,6 @@ jobs:
           echo "Dev dependencies do not ship to Cloudflare Workers production."
           echo "Production dependency audit (npm audit --omit=dev) is the blocking check."
 
-  # ──────────────────────────────────────────────
-  # Security: SBOM generation
-  # ──────────────────────────────────────────────
   sbom:
     name: Generate SBOM
     runs-on: ubuntu-latest
