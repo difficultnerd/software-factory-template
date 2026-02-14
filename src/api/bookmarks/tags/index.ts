@@ -6,10 +6,10 @@
  * @invariants All operations scoped to authenticated user via RLS
  * @spec SPEC-2026-12
  */
-
 import { Hono } from 'hono';
 import { createAuthenticatedSupabaseClient } from '../../../lib/supabase.js';
 import { BookmarkService } from '../../../lib/bookmark-service.js';
+import { logger } from '../../../lib/logger.js';
 import type { AuthEnv, AuthVariables } from '../../../middleware/auth.js';
 
 const app = new Hono<{
@@ -24,11 +24,15 @@ app.get('/', async (c) => {
   try {
     const supabase = createAuthenticatedSupabaseClient(c);
     const service = new BookmarkService(supabase, userId);
-
     const tags = await service.getUserTags();
-
     return c.json({ data: tags });
   } catch (error) {
+    logger.error({
+      event: 'bookmark.tags.failure',
+      actor: userId,
+      outcome: 'failure',
+      metadata: { error: error instanceof Error ? error.message : 'Unknown error' },
+    });
     return c.json({ error: 'Failed to fetch tags' }, 500);
   }
 });
