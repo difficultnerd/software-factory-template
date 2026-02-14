@@ -1,0 +1,34 @@
+name: Feature Request (Spec Agent)
+description: Describe a feature for the AI agents to build
+labels: ["spec-request"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the feature you want built. Be as detailed as you like.
+        The Spec Agent will translate this into a structured specification
+        and open a PR for your review.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Feature Description
+      description: What do you want this feature to do?
+      placeholder: |
+        Describe the feature in your own words. Include:
+        - What problem it solves
+        - How you expect it to work
+        - Any specific requirements or constraints
+        - Examples if helpful
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Any extra information, references, or constraints
+      placeholder: |
+        Optional: links, mockups, technical constraints, etc.
+    validations:
+      required: false
