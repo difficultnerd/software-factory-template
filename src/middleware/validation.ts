@@ -13,7 +13,7 @@
  */
 
 import { createMiddleware } from 'hono/factory';
-import { type ZodSchema, type ZodError } from 'zod';
+import { type ZodType, type ZodTypeDef, type ZodSchema, type ZodError } from 'zod';
 import { logger } from '../lib/logger.js';
 
 /** Validated data stored in Hono context variables */
@@ -95,7 +95,7 @@ export function validateBody<T>(schema: ZodSchema<T>) {
  *   const query = c.get('validatedQuery') as ListQuery;
  * });
  */
-export function validateQuery<T>(schema: ZodSchema<T>) {
+export function validateQuery<T>(schema: ZodType<T, ZodTypeDef, unknown>) {
   return createMiddleware<{ Variables: ValidationVariables }>(async (c, next) => {
     const rawQuery = c.req.query();
     const result = schema.safeParse(rawQuery);
