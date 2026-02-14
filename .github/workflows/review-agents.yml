@@ -1,0 +1,110 @@
+name: Review Agents
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+    paths:
+      - 'src/api/**'
+      - 'src/lib/**'
+      - 'src/schemas/**'
+      - 'src/ui/**'
+      - 'src/index.ts'
+      - 'supabase/**'
+
+jobs:
+  security-review:
+    name: Security Review
+    runs-on: ubuntu-latest
+    # Only review PRs from agent bots or the repo owner
+    if: >-
+      contains(github.event.pull_request.user.login, '[bot]') ||
+      contains(github.event.pull_request.user.login, 'github-actions') ||
+      github.event.pull_request.user.login == github.repository_owner
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Get PR diff
+        id: diff
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr diff ${{ github.event.pull_request.number }} > /tmp/pr-diff.txt
+          echo "Retrieved PR diff ($(wc -c < /tmp/pr-diff.txt) bytes)"
+
+      - name: Run security review
+        id: review
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_DIFF: $(cat /tmp/pr-diff.txt)
+        run: |
+          export PR_DIFF="$(cat /tmp/pr-diff.txt)"
+          node .github/scripts/security-reviewer-agent.mjs
+
+      - name: Post security review
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -f /tmp/security-review.md ]; then
+            gh pr comment ${{ github.event.pull_request.number }} \
+              --body "$(cat /tmp/security-review.md)"
+          fi
+
+      - name: Block on veto
+        if: steps.review.outputs.verdict == 'veto'
+        run: |
+          echo "::error::Security review VETO. Only the human can override."
+          exit 1
+
+  code-review:
+    name: Code Review
+    runs-on: ubuntu-latest
+    needs: security-review
+    if: >-
+      contains(github.event.pull_request.user.login, '[bot]') ||
+      contains(github.event.pull_request.user.login, 'github-actions') ||
+      github.event.pull_request.user.login == github.repository_owner
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Get PR diff
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr diff ${{ github.event.pull_request.number }} > /tmp/pr-diff.txt
+
+      - name: Run code review
+        id: review
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          export PR_DIFF="$(cat /tmp/pr-diff.txt)"
+          node .github/scripts/code-reviewer-agent.mjs
+
+      - name: Post code review
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -f /tmp/code-review.md ]; then
+            gh pr comment ${{ github.event.pull_request.number }} \
+              --body "$(cat /tmp/code-review.md)"
+          fi
