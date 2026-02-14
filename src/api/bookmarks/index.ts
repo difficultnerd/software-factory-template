@@ -36,7 +36,7 @@ app.post('/', validateBody(CreateBookmarkSchema), async (c) => {
   try {
     const bookmark = await service.createBookmark(data);
     return c.json({ data: bookmark }, 201);
-  } catch (_error) {
+  } catch {
     return c.json({ error: 'Failed to create bookmark' }, 500);
   }
 });
@@ -58,7 +58,7 @@ app.get('/', validateQuery(BookmarkQuerySchema), async (c) => {
         hasMore: result.hasMore,
       },
     });
-  } catch (_error) {
+  } catch {
     return c.json({ error: 'Failed to fetch bookmarks' }, 500);
   }
 });
