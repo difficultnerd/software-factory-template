@@ -16,7 +16,7 @@ test.describe('Authentication Enforcement (Live Deployment)', () => {
   test('protected API routes return 401 with invalid bearer token', async ({ request }) => {
     const response = await request.get('/api/test', {
       headers: {
-        'Authorization': 'Bearer invalid-token-that-should-fail',
+        Authorization: 'Bearer invalid-token-that-should-fail',
       },
     });
     expect(response.status()).toBe(401);
