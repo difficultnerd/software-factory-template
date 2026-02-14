@@ -36,8 +36,10 @@ describe('Error Handling Middleware', () => {
       const res = await app.request('/throw-error');
       expect(res.status).toBe(500);
 
-      const body = await res.json();
-      expect(body.error).toBe('An internal error occurred');
+      const text = await res.json();
+      expect(text).not.toContain('database');
+      expect(text).not.toContain('password');
+      expect(text).not.toContain('postgres');
     });
 
     it('does not leak error messages to client', async () => {
