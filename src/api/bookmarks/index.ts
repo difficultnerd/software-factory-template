@@ -6,11 +6,11 @@
  * @invariants All operations scoped to authenticated user via RLS
  * @spec SPEC-2026-12
  */
-
 import { Hono } from 'hono';
 import { validateBody, validateQuery } from '../../middleware/validation.js';
 import { createAuthenticatedSupabaseClient } from '../../lib/supabase.js';
 import { BookmarkService } from '../../lib/bookmark-service.js';
+import { logger } from '../../lib/logger.js';
 import {
   CreateBookmarkSchema,
   BookmarkQuerySchema,
@@ -29,14 +29,19 @@ const app = new Hono<{
 app.post('/', validateBody(CreateBookmarkSchema), async (c) => {
   const data = c.get('validatedBody') as CreateBookmark;
   const userId = c.get('userId');
-
   const supabase = createAuthenticatedSupabaseClient(c);
   const service = new BookmarkService(supabase, userId);
 
   try {
     const bookmark = await service.createBookmark(data);
     return c.json({ data: bookmark }, 201);
-  } catch {
+  } catch (error) {
+    logger.error({
+      event: 'bookmark.create.failure',
+      actor: userId,
+      outcome: 'failure',
+      metadata: { error: error instanceof Error ? error.message : 'Unknown error' },
+    });
     return c.json({ error: 'Failed to create bookmark' }, 500);
   }
 });
@@ -45,7 +50,6 @@ app.post('/', validateBody(CreateBookmarkSchema), async (c) => {
 app.get('/', validateQuery(BookmarkQuerySchema), async (c) => {
   const query = c.get('validatedQuery') as BookmarkQuery;
   const userId = c.get('userId');
-
   const supabase = createAuthenticatedSupabaseClient(c);
   const service = new BookmarkService(supabase, userId);
 
@@ -58,7 +62,13 @@ app.get('/', validateQuery(BookmarkQuerySchema), async (c) => {
         hasMore: result.hasMore,
       },
     });
-  } catch {
+  } catch (error) {
+    logger.error({
+      event: 'bookmark.list.failure',
+      actor: userId,
+      outcome: 'failure',
+      metadata: { error: error instanceof Error ? error.message : 'Unknown error' },
+    });
     return c.json({ error: 'Failed to fetch bookmarks' }, 500);
   }
 });
