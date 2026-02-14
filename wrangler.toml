@@ -1,0 +1,8 @@
+name = "software-factory-api"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+[vars]
+# Non-secret environment variables go here
+# Secrets are set via: wrangler secret put SECRET_NAME
+
